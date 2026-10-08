@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#7c5cff">
+  <title>Budget</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="start-screen" class="start">
+    <button id="plus-button" class="plus" aria-label="Neue Ausgabe">+</button>
+
+    <div class="anzeige">
+      <p class="label">Noch übrig bis Periodenende</p>
+      <p id="rest-gesamt" class="betrag">CHF 0.00</p>
+      <p class="label">Pro Tag verfügbar</p>
+      <p id="rest-pro-tag" class="betrag">CHF 0.00</p>
+    </div>
+
+    <div class="motivation">
+      <p class="punkte">⭐ <span id="punkte-anzeige">0</span> Punkte</p>
+      <p id="streak-anzeige" class="streak">🔥 0 Tage in Folge</p>
+      <div class="challenge">
+        <p class="challenge-titel">🎯 Tages-Challenge</p>
+        <p id="challenge-text" class="challenge-text"></p>
+        <p id="challenge-status" class="challenge-status"></p>
+      </div>
+    </div>
+
+    <div class="links">
+      <button id="liste-oeffnen" class="link">Ausgaben</button>
+      <button id="abzeichen-oeffnen" class="link">Abzeichen</button>
+      <button id="budget-aendern" class="link">Budget ändern</button>
+    </div>
+  </main>
+
+  <section id="setup-screen" class="setup" hidden>
+    <h1>Dein Budget</h1>
+    <label>
+      Budget pro Monat (CHF)
+      <input id="budget-input" type="number" inputmode="decimal" min="0" step="0.05">
+    </label>
+    <p id="setup-hinweis" class="hinweis" hidden></p>
+    <button id="setup-speichern" class="haupt-button">Speichern</button>
+  </section>
+
+  <section id="liste-screen" class="liste" hidden>
+    <h1>Ausgaben</h1>
+    <p id="liste-zeitraum" class="label"></p>
+    <p id="liste-leer" class="label" hidden>Noch keine Ausgaben in diesem Zeitraum.</p>
+    <ul id="ausgaben-liste"></ul>
+    <button id="verlauf-oeffnen" class="link">Frühere Perioden ansehen</button>
+    <button id="liste-schliessen" class="haupt-button">Zurück</button>
+  </section>
+
+  <section id="verlauf-screen" class="liste" hidden>
+    <h1>Frühere Perioden</h1>
+    <p id="verlauf-leer" class="label" hidden></p>
+    <div id="verlauf-liste" class="verlauf"></div>
+    <button id="verlauf-schliessen" class="haupt-button">Zurück</button>
+  </section>
+
+  <section id="abzeichen-screen" class="liste" hidden>
+    <h1>Abzeichen</h1>
+    <ul id="abzeichen-liste" class="abzeichen-gitter"></ul>
+    <button id="abzeichen-schliessen" class="haupt-button">Zurück</button>
+  </section>
+
+  <section id="ausgabe-screen" class="overlay" hidden>
+    <form id="ausgabe-form" class="karte">
+      <h2 id="ausgabe-titel">Neue Ausgabe</h2>
+      <label>
+        Betrag (CHF)
+        <input id="betrag-input" type="number" inputmode="decimal" min="0" step="0.05" placeholder="0.00">
+      </label>
+      <label>
+        Kategorie (optional, +5 Bonuspunkte)
+        <select id="kategorie-input">
+          <option value="">– keine –</option>
+          <option>Haushalt</option>
+          <option>Kleidung</option>
+          <option>Sport</option>
+          <option>ÖV & Uber</option>
+          <option>Basteln/Wohnung</option>
+          <option>Vergnügen</option>
+          <option>Berufsbedingte auswärtige Verpflegung</option>
+          <option>Medikamente & Arzt</option>
+          <option>Diverses</option>
+        </select>
+      </label>
+      <p id="ausgabe-hinweis" class="hinweis" hidden></p>
+      <button type="submit" class="haupt-button">Speichern</button>
+      <button type="button" id="ausgabe-abbrechen" class="link">Abbrechen</button>
+      <button type="button" id="ausgabe-loeschen" class="loeschen" hidden>Löschen</button>
+    </form>
+  </section>
+
+  <section id="popup-screen" class="overlay popup-overlay" hidden>
+    <div class="karte popup">
+      <p id="popup-symbol" class="popup-symbol"></p>
+      <h2 id="popup-titel"></h2>
+      <p id="popup-text" class="popup-text"></p>
+      <button id="popup-ok" class="haupt-button">Juhu! 🎉</button>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+  <script>
+    // Service Worker anmelden (für Offline-Nutzung und Installation)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js");
+    }
+  </script>
+</body>
+</html>
