@@ -130,6 +130,7 @@ const popupSymbol = document.getElementById("popup-symbol");
 const popupTitel = document.getElementById("popup-titel");
 const popupText = document.getElementById("popup-text");
 const popupOk = document.getElementById("popup-ok");
+const popupAktion = document.getElementById("popup-aktion");
 
 const toast = document.getElementById("toast");
 
@@ -263,8 +264,11 @@ function chf(betrag) {
 // --- Popup (muss bestätigt werden) ---
 const popupWarteschlange = []; // falls mehrere Popups gleichzeitig kommen
 
-function zeigePopup(symbol, titel, text) {
-  popupWarteschlange.push({ symbol: symbol, titel: titel, text: text });
+let popupAktionFunktion = null; // was der Zusatz-Button im Popup tun soll
+
+// "aktion" ist optional, z. B. { text: "💾 Backup jetzt speichern", funktion: starteExport }
+function zeigePopup(symbol, titel, text, aktion) {
+  popupWarteschlange.push({ symbol: symbol, titel: titel, text: text, aktion: aktion });
   if (popupScreen.hidden) {
     naechstesPopup();
   }
@@ -279,10 +283,27 @@ function naechstesPopup() {
   popupSymbol.textContent = popup.symbol;
   popupTitel.textContent = popup.titel;
   popupText.innerHTML = popup.text; // innerHTML, damit <br> als Zeilenumbruch wirkt
+
+  // Zusatz-Button nur zeigen, wenn das Popup eine Aktion hat
+  if (popup.aktion) {
+    popupAktion.textContent = popup.aktion.text;
+    popupAktionFunktion = popup.aktion.funktion;
+    popupAktion.hidden = false;
+  } else {
+    popupAktionFunktion = null;
+    popupAktion.hidden = true;
+  }
   popupScreen.hidden = false;
 }
 
 popupOk.addEventListener("click", naechstesPopup);
+
+popupAktion.addEventListener("click", function () {
+  if (popupAktionFunktion) {
+    popupAktionFunktion();
+  }
+  naechstesPopup();
+});
 
 // Macht aus einer Liste von Abzeichen einen Text, eines pro Zeile
 function abzeichenAlsText(liste) {
@@ -421,7 +442,11 @@ function pruefePeriodenwechsel() {
     text = text + "<br><br>Neue Abzeichen:<br>" + abzeichenAlsText(neue);
   }
 
-  zeigePopup(symbol, titel, text);
+  // Erinnerung ans Backup
+  text = text + "<br><br>💾 <strong>Backup nicht vergessen:</strong><br>" +
+         "Speichere deine Daten und leg die Datei z. B. in Google Drive ab.";
+
+  zeigePopup(symbol, titel, text, { text: "💾 Backup jetzt speichern", funktion: starteExport });
   konfetti();
 }
 
@@ -895,7 +920,9 @@ function exportiereExcel() {
   XLSX.writeFile(mappe, "Budget_Export_" + tagText(new Date()) + ".xlsx");
 }
 
-exportButton.addEventListener("click", function () {
+exportButton.addEventListener("click", starteExport);
+
+function starteExport() {
   exportButton.disabled = true;
   exportButton.textContent = "Wird erstellt …";
   ladeExcelBibliothek()
@@ -910,7 +937,7 @@ exportButton.addEventListener("click", function () {
       exportButton.disabled = false;
       exportButton.textContent = "📥 Als Excel-Datei exportieren";
     });
-});
+}
 
 // --- Backup importieren ---
 const BACKUP_KENNUNG = "BUDGET-APP-BACKUP v1";

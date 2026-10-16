@@ -249,7 +249,8 @@ body {
   font-size: 18px;
 }
 
-.popup .haupt-button {
+.popup .haupt-button,
+.popup .zweit-button {
   width: 100%;
 }
 
