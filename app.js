@@ -75,6 +75,7 @@ const budgetInput = document.getElementById("budget-input");
 const setupHinweis = document.getElementById("setup-hinweis");
 const setupSpeichern = document.getElementById("setup-speichern");
 const budgetAendern = document.getElementById("budget-aendern");
+const setupZurueck = document.getElementById("setup-zurueck");
 const plusButton = document.getElementById("plus-button");
 
 const ausgabeScreen = document.getElementById("ausgabe-screen");
@@ -1272,6 +1273,7 @@ function zeigeStart() {
 function zeigeSetup() {
   budgetInput.value = daten.budget ?? "";
   setupHinweis.hidden = true;
+  setupZurueck.hidden = daten.budget === null; // beim ersten Start gibt es kein "Zurück"
   startScreen.hidden = true;
   setupScreen.hidden = false;
 }
@@ -1291,6 +1293,7 @@ setupSpeichern.addEventListener("click", function () {
 });
 
 budgetAendern.addEventListener("click", zeigeSetup);
+setupZurueck.addEventListener("click", zeigeStart); // ohne Speichern zurück
 
 // --- Ausgabe erfassen und bearbeiten ---
 let bearbeitenIndex = null; // null = neue Ausgabe, Zahl = bestehende bearbeiten
