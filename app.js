@@ -9,6 +9,19 @@ const PUNKTE_KATEGORIE = 5;
 const PUNKTE_CHALLENGE = 20;
 const PUNKTE_PERIODE = 50;
 const PUNKTE_UNTER_BUDGET = 100;
+const VERLAUF_PERIODEN = 12; // so viele Perioden zeigt die Auswertung "Verlauf"
+const PUNKTE_PRO_FRANKEN_GESPART = 1; // Spar-Punkte: pro gesparten Franken am Periodenende
+const AUSREISSER_PROZENT = 30; // ab so viel % über dem Durchschnitt gibt es einen Hinweis
+const AUSREISSER_MIN_CHF = 20; // ... und nur, wenn es mindestens so viele Franken mehr sind
+const WOCHENTAGE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+// Spar-Ziele fürs Pufferkonto (für Abzeichen und Fortschrittsanzeige)
+const SPAR_ZIELE = [
+  { id: "spar100", betrag: 100, symbol: "🐷", name: "CHF 100 gespart" },
+  { id: "spar500", betrag: 500, symbol: "🏦", name: "CHF 500 gespart" },
+  { id: "spar1000", betrag: 1000, symbol: "🚀", name: "CHF 1'000 gespart" },
+  { id: "spar2500", betrag: 2500, symbol: "🏝️", name: "CHF 2'500 gespart" }
+];
 
 const LOB = [
   "Super gemacht! 🎉",
@@ -40,8 +53,14 @@ const ABZEICHEN = [
   { id: "periode1", symbol: "📅", name: "Erste Periode dabei", erreicht: () => vergangenePerioden().length >= 1 },
   { id: "budget1", symbol: "💰", name: "Unter Budget geblieben", erreicht: () => anzahlUnterBudget() >= 1 },
   { id: "budget3", symbol: "👑", name: "3× unter Budget", erreicht: () => anzahlUnterBudget() >= 3 },
-  { id: "periode6", symbol: "🌳", name: "6 Perioden dabei", erreicht: () => vergangenePerioden().length >= 6 }
-];
+  { id: "periode6", symbol: "🌳", name: "6 Perioden dabei", erreicht: () => vergangenePerioden().length >= 6 },
+  { id: "punkte1000", symbol: "🌈", name: "1000 Punkte", erreicht: () => daten.punkte >= 1000 }
+].concat(SPAR_ZIELE.map(ziel => ({
+  id: ziel.id,
+  symbol: ziel.symbol,
+  name: ziel.name,
+  erreicht: () => pufferTotal() >= ziel.betrag
+})));
 
 // --- Elemente aus dem HTML holen ---
 const startScreen = document.getElementById("start-screen");
@@ -80,6 +99,27 @@ const verlaufLeer = document.getElementById("verlauf-leer");
 const verlaufOeffnen = document.getElementById("verlauf-oeffnen");
 const verlaufSchliessen = document.getElementById("verlauf-schliessen");
 
+const auswertungScreen = document.getElementById("auswertung-screen");
+const auswertungOeffnen = document.getElementById("auswertung-oeffnen");
+const auswertungSchliessen = document.getElementById("auswertung-schliessen");
+const ansichtPeriodeButton = document.getElementById("ansicht-periode");
+const ansichtVerlaufButton = document.getElementById("ansicht-verlauf");
+const auswertungPeriode = document.getElementById("auswertung-periode");
+const auswertungVerlauf = document.getElementById("auswertung-verlauf");
+const periodeAuswahl = document.getElementById("periode-auswahl");
+const periodeTotal = document.getElementById("periode-total");
+const periodeBalken = document.getElementById("periode-balken");
+const ansichtWochentageButton = document.getElementById("ansicht-wochentage");
+const auswertungWochentage = document.getElementById("auswertung-wochentage");
+const ausreisserEl = document.getElementById("ausreisser");
+const wochentagZeitraum = document.getElementById("wochentag-zeitraum");
+const wochentagFazit = document.getElementById("wochentag-fazit");
+const wochentagBalken = document.getElementById("wochentag-balken");
+const pufferKarte = document.getElementById("puffer-karte");
+const kategorieAuswahl = document.getElementById("kategorie-auswahl");
+const verlaufTotal = document.getElementById("verlauf-total");
+const verlaufBalken = document.getElementById("verlauf-balken");
+
 const abzeichenScreen = document.getElementById("abzeichen-screen");
 const abzeichenListe = document.getElementById("abzeichen-liste");
 const abzeichenOeffnen = document.getElementById("abzeichen-oeffnen");
@@ -92,6 +132,12 @@ const popupText = document.getElementById("popup-text");
 const popupOk = document.getElementById("popup-ok");
 
 const toast = document.getElementById("toast");
+
+// Alle Kategorien, direkt aus dem Auswahlfeld im HTML gelesen
+const KATEGORIEN = Array.from(kategorieInput.options)
+  .map(option => option.value)
+  .filter(wert => wert !== "");
+const OHNE_KATEGORIE = "Ohne Kategorie";
 
 // --- Datum-Hilfen ---
 function heute() {
@@ -148,8 +194,17 @@ function ladeDaten() {
   } else {
     d = { budget: null, ausgaben: [] };
   }
+  return ergaenzeFelder(d);
+}
 
-  // Fehlende Felder ergänzen (für ältere gespeicherte Daten)
+// Fehlende Felder ergänzen (für ältere gespeicherte oder importierte Daten)
+function ergaenzeFelder(d) {
+  if (d.budget === undefined) {
+    d.budget = null;
+  }
+  if (d.ausgaben === undefined) {
+    d.ausgaben = [];
+  }
   if (d.punkte === undefined) {
     d.punkte = 0;
   }
@@ -292,6 +347,36 @@ function anzahlUnterBudget() {
   return vergangenePerioden().filter(p => p.unterBudget).length;
 }
 
+// Summe aller Überschüsse = was insgesamt aufs Pufferkonto gehen sollte
+function pufferTotal() {
+  let summe = 0;
+  for (const periode of vergangenePerioden()) {
+    if (periode.ueberschuss > 0) {
+      summe = summe + periode.ueberschuss;
+    }
+  }
+  return summe;
+}
+
+// Karte oben auf der Abzeichen-Seite: Total und Fortschritt zum nächsten Spar-Abzeichen
+function zeigePufferKarte() {
+  const total = pufferTotal();
+  let html = "<p class='puffer-titel'>💸 Insgesamt aufs Pufferkonto</p>" +
+             "<p class='puffer-betrag'>" + chf(total) + "</p>";
+
+  const naechstes = SPAR_ZIELE.find(ziel => total < ziel.betrag);
+  if (naechstes) {
+    const fortschritt = Math.min(100, (total / naechstes.betrag) * 100);
+    html = html +
+      "<div class='puffer-spur'><div class='puffer-fortschritt' style='width:" + fortschritt + "%'></div></div>" +
+      "<p class='puffer-ziel'>Noch " + chf(naechstes.betrag - total) + " bis " +
+      naechstes.symbol + " " + naechstes.name + "</p>";
+  } else {
+    html = html + "<p class='puffer-ziel'>Alle Spar-Abzeichen geschafft! 🎉</p>";
+  }
+  pufferKarte.innerHTML = html;
+}
+
 // Beim ersten Öffnen nach Periodenende: feiern, Punkte geben,
 // an das Pufferkonto erinnern und alles zusammen in EINEM Popup anzeigen
 function pruefePeriodenwechsel() {
@@ -320,10 +405,14 @@ function pruefePeriodenwechsel() {
   daten.punkte = daten.punkte + punkte;
   text = text + "<br><strong>+" + punkte + " Punkte</strong>";
 
-  // Erinnerung ans Pufferkonto, falls etwas übrig ist
+  // Erinnerung ans Pufferkonto und Spar-Punkte, falls etwas übrig ist
   if (letzte.ueberschuss > 0) {
-    text = text + "<br><br>💸 <strong>Pufferkonto nicht vergessen:</strong><br>" +
-           "Überweise " + chf(letzte.ueberschuss) + " auf dein Pufferkonto.";
+    const sparPunkte = Math.floor(letzte.ueberschuss * PUNKTE_PRO_FRANKEN_GESPART);
+    daten.punkte = daten.punkte + sparPunkte;
+    text = text + "<br><strong>+" + sparPunkte + " Spar-Punkte</strong>" +
+           "<br><br>💸 <strong>Pufferkonto nicht vergessen:</strong><br>" +
+           "Überweise " + chf(letzte.ueberschuss) + " auf dein Pufferkonto.<br>" +
+           "Insgesamt gespart: <strong>" + chf(pufferTotal()) + "</strong>";
   }
 
   // Neue Abzeichen direkt darunter anhängen
@@ -370,6 +459,631 @@ function zeigeVerlauf() {
     verlaufListe.appendChild(details);
   }
 }
+
+// --- Auswertung ---
+let auswertungAnsicht = "periode"; // "periode" oder "verlauf"
+
+// Startdaten der letzten "anzahl" Perioden, neueste zuerst (inkl. aktueller)
+function letztePeriodenStarts(anzahl) {
+  const aktuell = zeitraumStart();
+  const starts = [];
+  for (let i = 0; i < anzahl; i++) {
+    starts.push(new Date(aktuell.getFullYear(), aktuell.getMonth() - i, STICHTAG));
+  }
+  return starts;
+}
+
+// Alle Ausgaben, die in der Periode mit diesem Start liegen
+function ausgabenDerPeriode(start) {
+  const ende = new Date(start.getFullYear(), start.getMonth() + 1, STICHTAG); // erster Tag der nächsten Periode
+  return daten.ausgaben.filter(function (ausgabe) {
+    const datum = new Date(ausgabe.datum);
+    return datum >= start && datum < ende;
+  });
+}
+
+// Summiert die Ausgaben pro Kategorie, z. B. { "Sport": 45, "Ohne Kategorie": 12 }
+function summenProKategorie(ausgaben) {
+  const summen = {};
+  for (const ausgabe of ausgaben) {
+    const kategorie = ausgabe.kategorie || OHNE_KATEGORIE;
+    summen[kategorie] = (summen[kategorie] || 0) + ausgabe.betrag;
+  }
+  return summen;
+}
+
+// Baut eine Balkenzeile: Name links, Betrag rechts, darunter der Balken
+function balkenZeile(name, betrag, maximum, zusatz, laufend) {
+  let breite = 0;
+  if (maximum > 0) {
+    breite = (betrag / maximum) * 100;
+  }
+  let klasse = "balken";
+  if (laufend) {
+    klasse = "balken laufend";
+  }
+  return "<div class='balken-zeile'>" +
+           "<div class='balken-text'><span>" + name + "</span>" +
+           "<strong>" + chf(betrag) + zusatz + "</strong></div>" +
+           "<div class='balken-spur'><div class='" + klasse + "' style='width:" + breite + "%'></div></div>" +
+         "</div>";
+}
+
+// Auswahlfeld "Periode" füllen: aktuelle Periode und alle früheren mit Ausgaben
+function fuellePeriodenAuswahl() {
+  const aktuell = zeitraumStart();
+  const vorher = periodeAuswahl.value;
+  periodeAuswahl.innerHTML = "";
+
+  const starts = [aktuell];
+  for (const periode of vergangenePerioden()) {
+    starts.push(periode.start);
+  }
+
+  for (const start of starts) {
+    const option = document.createElement("option");
+    option.value = tagText(start);
+    option.textContent = periodeText(start);
+    if (start.getTime() === aktuell.getTime()) {
+      option.textContent = option.textContent + " (aktuell)";
+    }
+    periodeAuswahl.appendChild(option);
+  }
+
+  if (vorher && starts.some(s => tagText(s) === vorher)) {
+    periodeAuswahl.value = vorher; // Auswahl beibehalten
+  }
+}
+
+// Auswahlfeld "Kategorie" füllen
+function fuelleKategorieAuswahl() {
+  if (kategorieAuswahl.options.length > 0) {
+    return; // schon gefüllt
+  }
+  const alle = ["Alle Kategorien"].concat(KATEGORIEN, [OHNE_KATEGORIE]);
+  for (const name of alle) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    kategorieAuswahl.appendChild(option);
+  }
+}
+
+// Ansicht 1: Wie viel pro Kategorie in einer Periode?
+function zeigeAuswertungPeriode() {
+  const start = new Date(periodeAuswahl.value + "T00:00:00");
+  const ausgaben = ausgabenDerPeriode(start);
+  const summen = summenProKategorie(ausgaben);
+
+  let total = 0;
+  for (const ausgabe of ausgaben) {
+    total = total + ausgabe.betrag;
+  }
+  const budget = daten.budgetVerlauf[tagText(start)] ?? daten.budget;
+  periodeTotal.innerHTML = "Total: <strong>" + chf(total) + "</strong> von " + chf(budget);
+
+  zeigeAusreisser(start, summen);
+
+  // Kategorien nach Betrag sortieren, grösste zuerst
+  const eintraege = Object.entries(summen).sort((a, b) => b[1] - a[1]);
+
+  if (eintraege.length === 0) {
+    periodeBalken.innerHTML = "<p class='balken-leer'>In dieser Periode gibt es noch keine Ausgaben.</p>";
+    return;
+  }
+
+  const maximum = eintraege[0][1];
+  let html = "";
+  for (const [kategorie, betrag] of eintraege) {
+    const prozent = Math.round((betrag / total) * 100);
+    html = html + balkenZeile(kategorie, betrag, maximum, " · " + prozent + "%", false);
+  }
+  periodeBalken.innerHTML = html;
+}
+
+// Ansicht 2: Wie viel für eine Kategorie über mehrere Perioden?
+function zeigeAuswertungVerlauf() {
+  const kategorie = kategorieAuswahl.value;
+  const aktuell = zeitraumStart();
+
+  // Ältester Eintrag bestimmt, wie weit zurück wir schauen (max. VERLAUF_PERIODEN)
+  let anzahl = 1;
+  for (const ausgabe of daten.ausgaben) {
+    const start = zeitraumStart(new Date(ausgabe.datum));
+    const abstand = (aktuell.getFullYear() - start.getFullYear()) * 12 +
+                    (aktuell.getMonth() - start.getMonth()) + 1;
+    anzahl = Math.max(anzahl, abstand);
+  }
+  anzahl = Math.min(anzahl, VERLAUF_PERIODEN);
+
+  const zeilen = [];
+  for (const start of letztePeriodenStarts(anzahl)) {
+    const summen = summenProKategorie(ausgabenDerPeriode(start));
+    let betrag = 0;
+    if (kategorie === "Alle Kategorien") {
+      for (const wert of Object.values(summen)) {
+        betrag = betrag + wert;
+      }
+    } else {
+      betrag = summen[kategorie] || 0;
+    }
+    zeilen.push({ start: start, betrag: betrag, laufend: start.getTime() === aktuell.getTime() });
+  }
+
+  // Durchschnitt nur über abgeschlossene Perioden
+  const abgeschlossen = zeilen.filter(z => !z.laufend);
+  if (abgeschlossen.length > 0) {
+    let summe = 0;
+    for (const zeile of abgeschlossen) {
+      summe = summe + zeile.betrag;
+    }
+    verlaufTotal.innerHTML = "Durchschnitt pro Periode: <strong>" +
+      chf(summe / abgeschlossen.length) + "</strong>";
+  } else {
+    verlaufTotal.textContent = "Der Durchschnitt erscheint, sobald eine Periode abgeschlossen ist.";
+  }
+
+  const maximum = Math.max(...zeilen.map(z => z.betrag));
+  let html = "";
+  for (const zeile of zeilen) {
+    let name = periodeText(zeile.start);
+    if (zeile.laufend) {
+      name = name + " (läuft)";
+    }
+    html = html + balkenZeile(name, zeile.betrag, maximum, "", zeile.laufend);
+  }
+  verlaufBalken.innerHTML = html;
+}
+
+// Ausreisser: Welche Kategorien liegen deutlich über dem Durchschnitt der Perioden davor?
+function zeigeAusreisser(start, summen) {
+  const fruehere = allePeriodenStarts().filter(s => s < start);
+  if (fruehere.length === 0) {
+    ausreisserEl.hidden = true; // noch nichts zum Vergleichen
+    return;
+  }
+
+  // Durchschnitt pro Kategorie über die früheren Perioden
+  const durchschnitt = {};
+  for (const s of fruehere) {
+    const summenFrueher = summenProKategorie(ausgabenDerPeriode(s));
+    for (const [kategorie, betrag] of Object.entries(summenFrueher)) {
+      durchschnitt[kategorie] = (durchschnitt[kategorie] || 0) + betrag / fruehere.length;
+    }
+  }
+
+  const laeuft = start.getTime() === zeitraumStart().getTime();
+  const auffaellig = [];
+  for (const [kategorie, betrag] of Object.entries(summen)) {
+    const schnitt = durchschnitt[kategorie] || 0;
+    if (schnitt <= 0) {
+      continue;
+    }
+    const prozent = Math.round(((betrag - schnitt) / schnitt) * 100);
+    if (prozent >= AUSREISSER_PROZENT && betrag - schnitt >= AUSREISSER_MIN_CHF) {
+      auffaellig.push({ kategorie: kategorie, betrag: betrag, schnitt: schnitt, prozent: prozent });
+    }
+  }
+  auffaellig.sort((a, b) => b.prozent - a.prozent);
+
+  let html = "";
+  if (auffaellig.length === 0) {
+    html = "<p>✅ Keine Kategorie liegt deutlich über deinem Durchschnitt.</p>";
+  } else {
+    for (const eintrag of auffaellig.slice(0, 3)) {
+      let wort = "";
+      if (laeuft) {
+        wort = "schon ";
+      }
+      html = html + "<p>👀 <strong>" + eintrag.kategorie + "</strong> ist " + wort +
+             eintrag.prozent + " % über deinem Durchschnitt<br>" +
+             chf(eintrag.betrag) + " statt sonst " + chf(eintrag.schnitt) + "</p>";
+    }
+  }
+  ausreisserEl.innerHTML = html;
+  ausreisserEl.hidden = false;
+}
+
+// Ansicht 3: An welchen Wochentagen wird am meisten ausgegeben?
+function zeigeAuswertungWochentage() {
+  let ab = null; // ab welchem Datum gezählt wird (null = alles)
+  const aktuell = zeitraumStart();
+  if (wochentagZeitraum.value === "aktuell") {
+    ab = aktuell;
+  } else if (wochentagZeitraum.value === "3") {
+    ab = new Date(aktuell.getFullYear(), aktuell.getMonth() - 2, STICHTAG);
+  }
+
+  const summen = [0, 0, 0, 0, 0, 0, 0]; // Montag bis Sonntag
+  let total = 0;
+  for (const ausgabe of daten.ausgaben) {
+    const datum = new Date(ausgabe.datum);
+    if (ab && datum < ab) {
+      continue;
+    }
+    const tag = (datum.getDay() + 6) % 7; // JavaScript zählt ab Sonntag, wir ab Montag
+    summen[tag] = summen[tag] + ausgabe.betrag;
+    total = total + ausgabe.betrag;
+  }
+
+  if (total === 0) {
+    wochentagFazit.innerHTML = "<p>In diesem Zeitraum gibt es noch keine Ausgaben.</p>";
+    wochentagBalken.innerHTML = "";
+    return;
+  }
+
+  const maximum = Math.max(...summen);
+  const topTag = summen.indexOf(maximum);
+  const wochenende = summen[5] + summen[6];
+  wochentagFazit.innerHTML =
+    "<p>📅 Am meisten gibst du am <strong>" + WOCHENTAGE[topTag] + "</strong> aus.</p>" +
+    "<p>🛋️ Wochenende: <strong>" + Math.round((wochenende / total) * 100) + " %</strong> deiner Ausgaben</p>";
+
+  let html = "";
+  for (let i = 0; i < 7; i++) {
+    const prozent = Math.round((summen[i] / total) * 100);
+    html = html + balkenZeile(WOCHENTAGE[i], summen[i], maximum, " · " + prozent + "%", false);
+  }
+  wochentagBalken.innerHTML = html;
+  // den stärksten Tag dunkler einfärben
+  wochentagBalken.querySelectorAll(".balken")[topTag].classList.add("markiert");
+}
+
+function zeigeAuswertung() {
+  ansichtPeriodeButton.classList.toggle("aktiv", auswertungAnsicht === "periode");
+  ansichtVerlaufButton.classList.toggle("aktiv", auswertungAnsicht === "verlauf");
+  ansichtWochentageButton.classList.toggle("aktiv", auswertungAnsicht === "wochentage");
+  auswertungPeriode.hidden = auswertungAnsicht !== "periode";
+  auswertungVerlauf.hidden = auswertungAnsicht !== "verlauf";
+  auswertungWochentage.hidden = auswertungAnsicht !== "wochentage";
+
+  if (auswertungAnsicht === "periode") {
+    fuellePeriodenAuswahl();
+    zeigeAuswertungPeriode();
+  } else if (auswertungAnsicht === "verlauf") {
+    fuelleKategorieAuswahl();
+    zeigeAuswertungVerlauf();
+  } else {
+    zeigeAuswertungWochentage();
+  }
+}
+
+auswertungOeffnen.addEventListener("click", function () {
+  startScreen.hidden = true;
+  auswertungScreen.hidden = false;
+  zeigeAuswertung();
+});
+
+auswertungSchliessen.addEventListener("click", zeigeStart);
+
+ansichtPeriodeButton.addEventListener("click", function () {
+  auswertungAnsicht = "periode";
+  zeigeAuswertung();
+});
+
+ansichtVerlaufButton.addEventListener("click", function () {
+  auswertungAnsicht = "verlauf";
+  zeigeAuswertung();
+});
+
+ansichtWochentageButton.addEventListener("click", function () {
+  auswertungAnsicht = "wochentage";
+  zeigeAuswertung();
+});
+
+wochentagZeitraum.addEventListener("change", zeigeAuswertungWochentage);
+periodeAuswahl.addEventListener("change", zeigeAuswertungPeriode);
+kategorieAuswahl.addEventListener("change", zeigeAuswertungVerlauf);
+
+// --- Excel-Export ---
+// Die Excel-Bibliothek wird erst beim ersten Export aus dem Internet geladen.
+// Danach speichert der Service Worker sie, sodass sie auch offline funktioniert.
+const EXCEL_BIBLIOTHEK = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+const exportButton = document.getElementById("export-button");
+
+function ladeExcelBibliothek() {
+  return new Promise(function (fertig, fehler) {
+    if (window.XLSX) {
+      fertig();
+      return;
+    }
+    const skript = document.createElement("script");
+    skript.src = EXCEL_BIBLIOTHEK;
+    skript.onload = fertig;
+    skript.onerror = fehler;
+    document.head.appendChild(skript);
+  });
+}
+
+// z. B. "25.09.2026 – 24.10.2026" (mit Jahr, für Excel)
+function periodeTextMitJahr(start) {
+  const format = { day: "2-digit", month: "2-digit", year: "numeric" };
+  return start.toLocaleDateString("de-CH", format) + " – " +
+         zeitraumEnde(start).toLocaleDateString("de-CH", format);
+}
+
+// Alle Perioden mit Ausgaben plus die aktuelle, älteste zuerst
+function allePeriodenStarts() {
+  const keys = new Set([tagText(zeitraumStart())]);
+  for (const ausgabe of daten.ausgaben) {
+    keys.add(tagText(zeitraumStart(new Date(ausgabe.datum))));
+  }
+  return Array.from(keys).sort().map(key => new Date(key + "T00:00:00"));
+}
+
+// Formatiert eine Spalte in einem Tabellenblatt (z. B. als Datum oder CHF)
+function formatiereSpalte(blatt, spalte, format) {
+  const bereich = XLSX.utils.decode_range(blatt["!ref"]);
+  for (let zeile = 1; zeile <= bereich.e.r; zeile++) {
+    const zelle = blatt[XLSX.utils.encode_cell({ r: zeile, c: spalte })];
+    if (zelle && (zelle.t === "n" || zelle.t === "d")) {
+      zelle.z = format;
+    }
+  }
+}
+
+function exportiereExcel() {
+  const mappe = XLSX.utils.book_new();
+
+  // Blatt 1: alle Ausgaben einzeln
+  const ausgaben = daten.ausgaben.slice().sort((a, b) => new Date(a.datum) - new Date(b.datum));
+  const zeilen1 = [["Datum", "Periode", "Kategorie", "Betrag (CHF)"]];
+  for (const ausgabe of ausgaben) {
+    const d = new Date(ausgabe.datum);
+    zeilen1.push([
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+      periodeTextMitJahr(zeitraumStart(d)),
+      ausgabe.kategorie || OHNE_KATEGORIE,
+      ausgabe.betrag
+    ]);
+  }
+  const blatt1 = XLSX.utils.aoa_to_sheet(zeilen1, { cellDates: true });
+  formatiereSpalte(blatt1, 0, "dd.mm.yyyy");
+  formatiereSpalte(blatt1, 3, "0.00");
+  blatt1["!cols"] = [{ wch: 12 }, { wch: 26 }, { wch: 36 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(mappe, blatt1, "Ausgaben");
+
+  // Blatt 2: Kategorien × Perioden
+  const starts = allePeriodenStarts();
+  const kopf = ["Kategorie"].concat(starts.map(periodeTextMitJahr), ["Total"]);
+  const zeilen2 = [kopf];
+  const summenProPeriode = starts.map(start => summenProKategorie(ausgabenDerPeriode(start)));
+  for (const kategorie of KATEGORIEN.concat([OHNE_KATEGORIE])) {
+    const werte = summenProPeriode.map(summen => summen[kategorie] || 0);
+    const total = werte.reduce((a, b) => a + b, 0);
+    zeilen2.push([kategorie].concat(werte, [total]));
+  }
+  const totalZeile = ["Total"];
+  for (let spalte = 1; spalte < kopf.length; spalte++) {
+    let summe = 0;
+    for (let zeile = 1; zeile < zeilen2.length; zeile++) {
+      summe = summe + zeilen2[zeile][spalte];
+    }
+    totalZeile.push(summe);
+  }
+  zeilen2.push(totalZeile);
+  const blatt2 = XLSX.utils.aoa_to_sheet(zeilen2);
+  for (let spalte = 1; spalte < kopf.length; spalte++) {
+    formatiereSpalte(blatt2, spalte, "0.00");
+  }
+  blatt2["!cols"] = [{ wch: 36 }].concat(kopf.slice(1).map(() => ({ wch: 24 })));
+  XLSX.utils.book_append_sheet(mappe, blatt2, "Pro Kategorie");
+
+  // Blatt 3: Übersicht pro Periode
+  const zeilen3 = [["Periode", "Budget (CHF)", "Ausgegeben (CHF)", "Übrig (CHF)"]];
+  for (const start of starts) {
+    const budget = daten.budgetVerlauf[tagText(start)] ?? daten.budget;
+    const ausgegeben = ausgabenDerPeriode(start).reduce((summe, a) => summe + a.betrag, 0);
+    zeilen3.push([periodeTextMitJahr(start), budget, ausgegeben, budget - ausgegeben]);
+  }
+  const blatt3 = XLSX.utils.aoa_to_sheet(zeilen3);
+  for (let spalte = 1; spalte <= 3; spalte++) {
+    formatiereSpalte(blatt3, spalte, "0.00");
+  }
+  blatt3["!cols"] = [{ wch: 26 }, { wch: 14 }, { wch: 18 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(mappe, blatt3, "Perioden");
+
+  // Blatt 4: alle App-Daten für die Wiederherstellung (in Stücke geteilt,
+  // weil eine Excel-Zelle höchstens 32'767 Zeichen fassen kann)
+  const json = JSON.stringify(daten);
+  const zeilen4 = [[BACKUP_KENNUNG + " – bitte nicht verändern"]];
+  for (let i = 0; i < json.length; i = i + 30000) {
+    zeilen4.push([json.slice(i, i + 30000)]);
+  }
+  XLSX.utils.book_append_sheet(mappe, XLSX.utils.aoa_to_sheet(zeilen4), "Backup");
+
+  XLSX.writeFile(mappe, "Budget_Export_" + tagText(new Date()) + ".xlsx");
+}
+
+exportButton.addEventListener("click", function () {
+  exportButton.disabled = true;
+  exportButton.textContent = "Wird erstellt …";
+  ladeExcelBibliothek()
+    .then(function () {
+      exportiereExcel();
+      zeigeToast("📥 Excel-Datei gespeichert (Ordner Downloads)");
+    })
+    .catch(function () {
+      zeigeToast("Für den ersten Export braucht es kurz Internet 🙂");
+    })
+    .finally(function () {
+      exportButton.disabled = false;
+      exportButton.textContent = "📥 Als Excel-Datei exportieren";
+    });
+});
+
+// --- Backup importieren ---
+const BACKUP_KENNUNG = "BUDGET-APP-BACKUP v1";
+const importButton = document.getElementById("import-button");
+const importSetup = document.getElementById("import-setup");
+const importDatei = document.getElementById("import-datei");
+const importScreen = document.getElementById("import-screen");
+const importText = document.getElementById("import-text");
+const importOk = document.getElementById("import-ok");
+const importAbbrechen = document.getElementById("import-abbrechen");
+
+let importDaten = null; // die gelesenen Backup-Daten, bis zur Bestätigung
+
+// "25.09.2026" -> "2026-09-25"
+function datumAusText(text) {
+  const teile = String(text).trim().slice(0, 10).split(".");
+  if (teile.length !== 3) {
+    return null;
+  }
+  return teile[2] + "-" + teile[1] + "-" + teile[0];
+}
+
+// Liest die Daten aus einer Excel-Datei
+function leseBackup(mappe) {
+  // Fall 1: Blatt "Backup" vorhanden -> alles exakt wiederherstellen
+  const backupBlatt = mappe.Sheets["Backup"];
+  if (backupBlatt) {
+    const zeilen = XLSX.utils.sheet_to_json(backupBlatt, { header: 1 });
+    if (String(zeilen[0][0]).startsWith(BACKUP_KENNUNG)) {
+      const json = zeilen.slice(1).map(zeile => zeile[0]).join("");
+      return ergaenzeFelder(JSON.parse(json));
+    }
+  }
+
+  // Fall 2: nur das Blatt "Ausgaben" -> Ausgaben (und Budgets) übernehmen
+  const ausgabenBlatt = mappe.Sheets["Ausgaben"];
+  if (!ausgabenBlatt) {
+    return null;
+  }
+  const d = { budget: null, ausgaben: [], budgetVerlauf: {} };
+  const zeilen = XLSX.utils.sheet_to_json(ausgabenBlatt, { header: 1 });
+  for (const zeile of zeilen.slice(1)) {
+    let datum = zeile[0];
+    const betrag = Number(zeile[3]);
+    if (!(datum instanceof Date)) {
+      const text = datumAusText(datum);
+      datum = text ? new Date(text + "T00:00:00") : null;
+    }
+    if (!datum || isNaN(datum) || isNaN(betrag) || betrag <= 0) {
+      continue; // leere oder ungültige Zeile überspringen
+    }
+    let kategorie = String(zeile[2] || "");
+    if (kategorie === OHNE_KATEGORIE) {
+      kategorie = "";
+    }
+    const mittag = new Date(datum.getFullYear(), datum.getMonth(), datum.getDate(), 12);
+    d.ausgaben.push({ betrag: betrag, kategorie: kategorie, datum: mittag.toISOString() });
+  }
+
+  const periodenBlatt = mappe.Sheets["Perioden"];
+  if (periodenBlatt) {
+    for (const zeile of XLSX.utils.sheet_to_json(periodenBlatt, { header: 1 }).slice(1)) {
+      const key = datumAusText(zeile[0]);
+      const budget = Number(zeile[1]);
+      if (key && budget > 0) {
+        d.budgetVerlauf[key] = budget;
+        d.budget = budget; // das letzte gilt als aktuelles Budget
+      }
+    }
+  }
+
+  // Abgeschlossene Perioden als "schon gefeiert" markieren (keine doppelten Punkte)
+  const aktuellerKey = tagText(zeitraumStart());
+  d.gefeiertePerioden = [];
+  for (const ausgabe of d.ausgaben) {
+    const key = tagText(zeitraumStart(new Date(ausgabe.datum)));
+    if (key !== aktuellerKey && !d.gefeiertePerioden.includes(key)) {
+      d.gefeiertePerioden.push(key);
+    }
+  }
+  return ergaenzeFelder(d);
+}
+
+// Backup und aktuelle Daten zusammenführen: nichts geht verloren, nichts doppelt
+function fuehreZusammen(backup, aktuell) {
+  const schluessel = a => a.datum + "|" + a.betrag + "|" + a.kategorie;
+  const imBackup = new Set(backup.ausgaben.map(schluessel));
+  const ausgaben = backup.ausgaben.slice();
+  for (const ausgabe of aktuell.ausgaben) {
+    if (!imBackup.has(schluessel(ausgabe))) {
+      ausgaben.push(ausgabe);
+    }
+  }
+  ausgaben.sort((a, b) => new Date(a.datum) - new Date(b.datum));
+
+  const vereinige = (a, b) => Array.from(new Set(a.concat(b)));
+  return {
+    budget: aktuell.budget ?? backup.budget,
+    ausgaben: ausgaben,
+    punkte: Math.max(backup.punkte, aktuell.punkte),
+    eintraegeGesamt: Math.max(backup.eintraegeGesamt, aktuell.eintraegeGesamt, ausgaben.length),
+    eintragTage: vereinige(backup.eintragTage, aktuell.eintragTage),
+    challenges: Object.assign({}, backup.challenges, aktuell.challenges),
+    abzeichen: vereinige(backup.abzeichen, aktuell.abzeichen),
+    budgetVerlauf: Object.assign({}, backup.budgetVerlauf, aktuell.budgetVerlauf),
+    gefeiertePerioden: vereinige(backup.gefeiertePerioden, aktuell.gefeiertePerioden)
+  };
+}
+
+function waehleBackupDatei() {
+  importDatei.value = ""; // damit dieselbe Datei auch zweimal gewählt werden kann
+  importDatei.click();
+}
+
+importButton.addEventListener("click", waehleBackupDatei);
+importSetup.addEventListener("click", waehleBackupDatei);
+
+importDatei.addEventListener("change", function () {
+  const datei = importDatei.files[0];
+  if (!datei) {
+    return;
+  }
+  ladeExcelBibliothek()
+    .then(() => datei.arrayBuffer())
+    .then(function (inhalt) {
+      const mappe = XLSX.read(inhalt, { type: "array", cellDates: true });
+      importDaten = leseBackup(mappe);
+      if (importDaten === null || importDaten.ausgaben.length === 0) {
+        zeigeToast("In dieser Datei habe ich keine Ausgaben gefunden 🤔");
+        return;
+      }
+      const neu = fuehreZusammen(importDaten, daten).ausgaben.length - daten.ausgaben.length;
+      importText.innerHTML =
+        "Im Backup gefunden:<br><strong>" + importDaten.ausgaben.length + " Ausgaben</strong>, " +
+        importDaten.punkte + " Punkte, " + importDaten.abzeichen.length + " Abzeichen<br><br>" +
+        "Davon fehlen auf diesem Gerät: <strong>" + neu + " Ausgaben</strong><br><br>" +
+        "Deine aktuellen Einträge bleiben erhalten.";
+      importScreen.hidden = false;
+    })
+    .catch(function () {
+      zeigeToast("Die Datei konnte nicht gelesen werden. Für den ersten Import braucht es Internet 🙂");
+    });
+});
+
+importAbbrechen.addEventListener("click", function () {
+  importDaten = null;
+  importScreen.hidden = true;
+});
+
+importOk.addEventListener("click", function () {
+  const vorher = daten.ausgaben.length;
+  daten = fuehreZusammen(importDaten, daten);
+  importDaten = null;
+  importScreen.hidden = true;
+
+  if (daten.budget !== null) {
+    const aktuellerKey = tagText(zeitraumStart());
+    if (daten.budgetVerlauf[aktuellerKey] === undefined) {
+      daten.budgetVerlauf[aktuellerKey] = daten.budget;
+    }
+  }
+  pruefeAbzeichen();
+  speichereDaten();
+
+  if (daten.budget === null) {
+    zeigeSetup(); // im Backup war kein Budget, also jetzt eingeben
+  } else {
+    zeigeStart();
+  }
+  zeigePopup("✅", "Backup wiederhergestellt!",
+    (daten.ausgaben.length - vorher) + " Ausgaben ergänzt.<br>Du hast jetzt " +
+    daten.ausgaben.length + " Ausgaben und " + daten.punkte + " Punkte.");
+});
 
 // --- Streak ---
 // Zählt Tage mit Einträgen. Ein verpasster Tag ist okay, erst 2 in Folge beenden den Streak.
@@ -522,6 +1236,7 @@ function zeigeStart() {
   setupScreen.hidden = true;
   listeScreen.hidden = true;
   verlaufScreen.hidden = true;
+  auswertungScreen.hidden = true;
   abzeichenScreen.hidden = true;
   startScreen.hidden = false;
   aktualisiereAnzeige();
@@ -660,7 +1375,7 @@ function eintragHTML(ausgabe) {
     day: "numeric",
     month: "short"
   });
-  const kategorie = ausgabe.kategorie || "Ohne Kategorie";
+  const kategorie = ausgabe.kategorie || OHNE_KATEGORIE;
   return "<span>" + datum + " · " + kategorie + "</span>" +
          "<strong>" + chf(ausgabe.betrag) + "</strong>";
 }
@@ -715,6 +1430,7 @@ verlaufSchliessen.addEventListener("click", function () {
 abzeichenOeffnen.addEventListener("click", function () {
   startScreen.hidden = true;
   abzeichenScreen.hidden = false;
+  zeigePufferKarte();
   zeigeAbzeichenListe();
 });
 

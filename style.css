@@ -121,6 +121,20 @@ body {
   color: white;
 }
 
+.zweit-button {
+  font-size: 18px;
+  padding: 14px;
+  border: 2px solid #7c5cff;
+  border-radius: 12px;
+  background: white;
+  color: #7c5cff;
+  font-weight: bold;
+}
+
+.zweit-button:disabled {
+  opacity: 0.6;
+}
+
 .link {
   background: none;
   border: none;
@@ -246,7 +260,7 @@ body {
   }
 }
 
-/* --- Listen (Ausgaben, Verlauf, Abzeichen) --- */
+/* --- Listen (Ausgaben, Verlauf, Auswertung, Abzeichen) --- */
 .liste {
   max-width: 500px;
   margin: 0 auto;
@@ -318,6 +332,164 @@ body {
   padding: 12px;
   font-size: 16px;
   cursor: default;
+}
+
+/* --- Auswertung --- */
+.umschalter {
+  display: flex;
+  background: white;
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.umschalt-button {
+  flex: 1;
+  border: none;
+  background: none;
+  border-radius: 9px;
+  padding: 12px 8px;
+  font-size: 16px;
+  color: #2d2a3e;
+}
+
+.umschalt-button.aktiv {
+  background: #7c5cff;
+  color: white;
+  font-weight: bold;
+}
+
+.auswahl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.auswahl select {
+  font-size: 18px;
+  padding: 12px;
+  border: 2px solid #d6ccff;
+  border-radius: 12px;
+  background: white;
+  color: #2d2a3e;
+}
+
+.auswertung-total {
+  margin: 8px 0 0;
+  font-size: 18px;
+}
+
+.balken-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.balken-zeile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.balken-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 16px;
+}
+
+.balken-text strong {
+  white-space: nowrap;
+}
+
+.balken-spur {
+  height: 14px;
+  background: #f4f1ff;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.balken {
+  height: 100%;
+  min-width: 2px;
+  background: #7c5cff;
+  border-radius: 4px;
+}
+
+.balken.laufend {
+  background: #b9a8ff;
+}
+
+.balken.markiert {
+  background: #5b3fd6;
+}
+
+.hinweis-karte {
+  background: white;
+  border-left: 5px solid #ffc93c;
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.hinweis-karte p {
+  margin: 0 0 6px;
+}
+
+.hinweis-karte p:last-child {
+  margin-bottom: 0;
+}
+
+.puffer-karte {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  text-align: center;
+}
+
+.puffer-karte p {
+  margin: 4px 0;
+}
+
+.puffer-titel {
+  font-size: 15px;
+  opacity: 0.7;
+}
+
+.puffer-betrag {
+  font-size: 30px;
+  font-weight: bold;
+  color: #7c5cff;
+}
+
+.puffer-ziel {
+  font-size: 15px;
+}
+
+.puffer-spur {
+  height: 10px;
+  background: #f4f1ff;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+
+.puffer-fortschritt {
+  height: 100%;
+  background: #4cd4a0;
+  border-radius: 4px;
+}
+
+.balken-leer {
+  margin: 0;
+  opacity: 0.7;
+  text-align: center;
 }
 
 /* --- Abzeichen --- */

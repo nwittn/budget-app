@@ -33,6 +33,7 @@
 
     <div class="links">
       <button id="liste-oeffnen" class="link">Ausgaben</button>
+      <button id="auswertung-oeffnen" class="link">Auswertung</button>
       <button id="abzeichen-oeffnen" class="link">Abzeichen</button>
       <button id="budget-aendern" class="link">Budget ändern</button>
     </div>
@@ -46,6 +47,7 @@
     </label>
     <p id="setup-hinweis" class="hinweis" hidden></p>
     <button id="setup-speichern" class="haupt-button">Speichern</button>
+    <button id="import-setup" class="link">📂 Daten aus Backup wiederherstellen</button>
   </section>
 
   <section id="liste-screen" class="liste" hidden>
@@ -64,8 +66,56 @@
     <button id="verlauf-schliessen" class="haupt-button">Zurück</button>
   </section>
 
+  <section id="auswertung-screen" class="liste" hidden>
+    <h1>Auswertung</h1>
+
+    <div class="umschalter">
+      <button id="ansicht-periode" class="umschalt-button aktiv">Pro Periode</button>
+      <button id="ansicht-verlauf" class="umschalt-button">Verlauf</button>
+      <button id="ansicht-wochentage" class="umschalt-button">Wochentage</button>
+    </div>
+
+    <div id="auswertung-periode">
+      <label class="auswahl">
+        Periode
+        <select id="periode-auswahl"></select>
+      </label>
+      <p id="periode-total" class="auswertung-total"></p>
+      <div id="ausreisser" class="hinweis-karte" hidden></div>
+      <div id="periode-balken" class="balken-liste"></div>
+    </div>
+
+    <div id="auswertung-wochentage" hidden>
+      <label class="auswahl">
+        Zeitraum
+        <select id="wochentag-zeitraum">
+          <option value="aktuell">Aktuelle Periode</option>
+          <option value="3">Letzte 3 Perioden</option>
+          <option value="alle" selected>Alle Ausgaben</option>
+        </select>
+      </label>
+      <div id="wochentag-fazit" class="hinweis-karte"></div>
+      <div id="wochentag-balken" class="balken-liste"></div>
+    </div>
+
+    <div id="auswertung-verlauf" hidden>
+      <label class="auswahl">
+        Kategorie
+        <select id="kategorie-auswahl"></select>
+      </label>
+      <p id="verlauf-total" class="auswertung-total"></p>
+      <div id="verlauf-balken" class="balken-liste"></div>
+    </div>
+
+    <button id="export-button" class="zweit-button">📥 Als Excel-Datei exportieren</button>
+    <button id="import-button" class="zweit-button">📂 Backup importieren</button>
+    <input type="file" id="import-datei" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+    <button id="auswertung-schliessen" class="haupt-button">Zurück</button>
+  </section>
+
   <section id="abzeichen-screen" class="liste" hidden>
     <h1>Abzeichen</h1>
+    <div id="puffer-karte" class="puffer-karte"></div>
     <ul id="abzeichen-liste" class="abzeichen-gitter"></ul>
     <button id="abzeichen-schliessen" class="haupt-button">Zurück</button>
   </section>
@@ -89,6 +139,7 @@
           <option>Vergnügen</option>
           <option>Berufsbedingte auswärtige Verpflegung</option>
           <option>Medikamente & Arzt</option>
+          <option>Beauty</option>
           <option>Diverses</option>
         </select>
       </label>
@@ -97,6 +148,16 @@
       <button type="button" id="ausgabe-abbrechen" class="link">Abbrechen</button>
       <button type="button" id="ausgabe-loeschen" class="loeschen" hidden>Löschen</button>
     </form>
+  </section>
+
+  <section id="import-screen" class="overlay" hidden>
+    <div class="karte popup">
+      <p class="popup-symbol">📂</p>
+      <h2>Backup wiederherstellen?</h2>
+      <p id="import-text" class="popup-text"></p>
+      <button id="import-ok" class="haupt-button">Ja, wiederherstellen</button>
+      <button id="import-abbrechen" class="link">Abbrechen</button>
+    </div>
   </section>
 
   <section id="popup-screen" class="overlay popup-overlay" hidden>
