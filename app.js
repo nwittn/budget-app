@@ -482,9 +482,70 @@ function zeigeVerlauf() {
     html = html + "</ul>";
 
     details.innerHTML = html;
+    const druckKnopf = document.createElement("button");
+    druckKnopf.className = "zweit-button periode-drucken";
+    druckKnopf.textContent = "🖨️ Diese Periode drucken / PDF";
+    druckKnopf.addEventListener("click", function () {
+      druckePeriode(periode.start);
+    });
+    details.appendChild(druckKnopf);
     verlaufListe.appendChild(details);
   }
 }
+
+// --- Drucken / als PDF speichern ---
+const druckBereich = document.getElementById("druck-bereich");
+const listeDrucken = document.getElementById("liste-drucken");
+
+// Baut die Druckansicht für eine Periode und öffnet den Druckdialog
+function druckePeriode(start) {
+  const ausgaben = ausgabenDerPeriode(start)
+    .slice()
+    .sort((a, b) => new Date(a.datum) - new Date(b.datum)); // älteste zuerst
+  const budget = daten.budgetVerlauf[tagText(start)] ?? daten.budget;
+  let total = 0;
+  for (const ausgabe of ausgaben) {
+    total = total + ausgabe.betrag;
+  }
+
+  let html = "<h1>Ausgaben " + periodeTextMitJahr(start) + "</h1>" +
+             "<p class='druck-untertitel'>Budget " + chf(budget) +
+             " · Ausgegeben " + chf(total) + " · Übrig " + chf(budget - total) +
+             " · Gedruckt am " + new Date().toLocaleDateString("de-CH") + "</p>";
+
+  // Tabelle 1: alle Ausgaben
+  html = html + "<table><thead><tr><th>Datum</th><th>Kategorie</th><th class='zahl'>Betrag</th></tr></thead><tbody>";
+  if (ausgaben.length === 0) {
+    html = html + "<tr><td colspan='3'>Keine Ausgaben in dieser Periode.</td></tr>";
+  }
+  for (const ausgabe of ausgaben) {
+    const datum = new Date(ausgabe.datum).toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+    html = html + "<tr><td>" + datum + "</td><td>" + (ausgabe.kategorie || OHNE_KATEGORIE) +
+           "</td><td class='zahl'>" + chf(ausgabe.betrag) + "</td></tr>";
+  }
+  html = html + "<tr class='summe'><td colspan='2'>Total</td><td class='zahl'>" + chf(total) + "</td></tr></tbody></table>";
+
+  // Tabelle 2: Summe pro Kategorie
+  const summen = Object.entries(summenProKategorie(ausgaben)).sort((a, b) => b[1] - a[1]);
+  if (summen.length > 0) {
+    html = html + "<h2>Pro Kategorie</h2><table><thead><tr><th>Kategorie</th><th class='zahl'>Betrag</th><th class='zahl'>Anteil</th></tr></thead><tbody>";
+    for (const [kategorie, betrag] of summen) {
+      html = html + "<tr><td>" + kategorie + "</td><td class='zahl'>" + chf(betrag) +
+             "</td><td class='zahl'>" + Math.round((betrag / total) * 100) + " %</td></tr>";
+    }
+    html = html + "</tbody></table>";
+  }
+
+  druckBereich.innerHTML = html;
+  const alterTitel = document.title;
+  document.title = "Ausgaben_" + tagText(start); // wird zum Dateinamen beim PDF-Speichern
+  window.print();
+  document.title = alterTitel;
+}
+
+listeDrucken.addEventListener("click", function () {
+  druckePeriode(zeitraumStart());
+});
 
 // --- Auswertung ---
 let auswertungAnsicht = "periode"; // "periode" oder "verlauf"

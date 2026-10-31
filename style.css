@@ -558,3 +558,76 @@ body {
     transform: translate(var(--drift), 110vh) rotate(var(--drehung));
   }
 }
+
+/* --- Drucken --- */
+.druck-bereich {
+  display: none;
+}
+
+.periode-drucken {
+  margin-top: 12px;
+  width: 100%;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  body > *:not(.druck-bereich) {
+    display: none !important;
+  }
+
+  .druck-bereich {
+    display: block;
+    font-family: system-ui, sans-serif;
+    color: black;
+    font-size: 11pt;
+  }
+
+  .druck-bereich h1 {
+    font-size: 18pt;
+    margin: 0 0 4px;
+  }
+
+  .druck-bereich h2 {
+    font-size: 13pt;
+    margin: 18px 0 6px;
+  }
+
+  .druck-untertitel {
+    margin: 0 0 12px;
+    color: #555;
+  }
+
+  .druck-bereich table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .druck-bereich th,
+  .druck-bereich td {
+    text-align: left;
+    padding: 5px 6px;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .druck-bereich th {
+    border-bottom: 2px solid black;
+  }
+
+  .druck-bereich .zahl {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .druck-bereich tr.summe td {
+    font-weight: bold;
+    border-top: 2px solid black;
+    border-bottom: none;
+  }
+
+  .druck-bereich tr {
+    page-break-inside: avoid;
+  }
+}
