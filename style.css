@@ -297,6 +297,23 @@ body {
   cursor: pointer;
 }
 
+.eintrag-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.liste li strong {
+  white-space: nowrap;
+}
+
+.notiz {
+  font-size: 14px;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+
 /* --- Frühere Perioden --- */
 .verlauf {
   display: flex;

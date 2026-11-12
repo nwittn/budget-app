@@ -83,6 +83,7 @@ const ausgabeForm = document.getElementById("ausgabe-form");
 const ausgabeTitel = document.getElementById("ausgabe-titel");
 const betragInput = document.getElementById("betrag-input");
 const kategorieInput = document.getElementById("kategorie-input");
+const notizInput = document.getElementById("notiz-input");
 const ausgabeHinweis = document.getElementById("ausgabe-hinweis");
 const ausgabeAbbrechen = document.getElementById("ausgabe-abbrechen");
 const ausgabeLoeschen = document.getElementById("ausgabe-loeschen");
@@ -140,6 +141,11 @@ const KATEGORIEN = Array.from(kategorieInput.options)
   .map(option => option.value)
   .filter(wert => wert !== "");
 const OHNE_KATEGORIE = "Ohne Kategorie";
+
+// Alter Name -> neuer Name (für Einträge, die vor dem Umbenennen gespeichert wurden)
+const UMBENANNTE_KATEGORIEN = {
+  "Berufsbedingte auswärtige Verpflegung": "Auswärtige Verpflegung"
+};
 
 // --- Datum-Hilfen ---
 function heute() {
@@ -207,6 +213,13 @@ function ergaenzeFelder(d) {
   if (d.ausgaben === undefined) {
     d.ausgaben = [];
   }
+  // Umbenannte Kategorien bei bestehenden Einträgen anpassen
+  for (const ausgabe of d.ausgaben) {
+    const neu = UMBENANNTE_KATEGORIEN[ausgabe.kategorie];
+    if (neu) {
+      ausgabe.kategorie = neu;
+    }
+  }
   if (d.punkte === undefined) {
     d.punkte = 0;
   }
@@ -256,6 +269,15 @@ function summeAusgaben() {
     }
   }
   return summe;
+}
+
+// Macht eigenen Text (z. B. Notizen) sicher fürs Einfügen in HTML
+function sicher(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function chf(betrag) {
@@ -514,16 +536,17 @@ function druckePeriode(start) {
              " · Gedruckt am " + new Date().toLocaleDateString("de-CH") + "</p>";
 
   // Tabelle 1: alle Ausgaben
-  html = html + "<table><thead><tr><th>Datum</th><th>Kategorie</th><th class='zahl'>Betrag</th></tr></thead><tbody>";
+  html = html + "<table><thead><tr><th>Datum</th><th>Kategorie</th><th>Notiz</th><th class='zahl'>Betrag</th></tr></thead><tbody>";
   if (ausgaben.length === 0) {
-    html = html + "<tr><td colspan='3'>Keine Ausgaben in dieser Periode.</td></tr>";
+    html = html + "<tr><td colspan='4'>Keine Ausgaben in dieser Periode.</td></tr>";
   }
   for (const ausgabe of ausgaben) {
     const datum = new Date(ausgabe.datum).toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
     html = html + "<tr><td>" + datum + "</td><td>" + (ausgabe.kategorie || OHNE_KATEGORIE) +
+           "</td><td>" + sicher(ausgabe.notiz) +
            "</td><td class='zahl'>" + chf(ausgabe.betrag) + "</td></tr>";
   }
-  html = html + "<tr class='summe'><td colspan='2'>Total</td><td class='zahl'>" + chf(total) + "</td></tr></tbody></table>";
+  html = html + "<tr class='summe'><td colspan='3'>Total</td><td class='zahl'>" + chf(total) + "</td></tr></tbody></table>";
 
   // Tabelle 2: Summe pro Kategorie
   const summen = Object.entries(summenProKategorie(ausgaben)).sort((a, b) => b[1] - a[1]);
@@ -914,20 +937,21 @@ function exportiereExcel() {
 
   // Blatt 1: alle Ausgaben einzeln
   const ausgaben = daten.ausgaben.slice().sort((a, b) => new Date(a.datum) - new Date(b.datum));
-  const zeilen1 = [["Datum", "Periode", "Kategorie", "Betrag (CHF)"]];
+  const zeilen1 = [["Datum", "Periode", "Kategorie", "Betrag (CHF)", "Notiz"]];
   for (const ausgabe of ausgaben) {
     const d = new Date(ausgabe.datum);
     zeilen1.push([
       new Date(d.getFullYear(), d.getMonth(), d.getDate()),
       periodeTextMitJahr(zeitraumStart(d)),
       ausgabe.kategorie || OHNE_KATEGORIE,
-      ausgabe.betrag
+      ausgabe.betrag,
+      ausgabe.notiz || ""
     ]);
   }
   const blatt1 = XLSX.utils.aoa_to_sheet(zeilen1, { cellDates: true });
   formatiereSpalte(blatt1, 0, "dd.mm.yyyy");
   formatiereSpalte(blatt1, 3, "0.00");
-  blatt1["!cols"] = [{ wch: 12 }, { wch: 26 }, { wch: 36 }, { wch: 14 }];
+  blatt1["!cols"] = [{ wch: 12 }, { wch: 26 }, { wch: 36 }, { wch: 14 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(mappe, blatt1, "Ausgaben");
 
   // Blatt 2: Kategorien × Perioden
@@ -1056,7 +1080,7 @@ function leseBackup(mappe) {
       kategorie = "";
     }
     const mittag = new Date(datum.getFullYear(), datum.getMonth(), datum.getDate(), 12);
-    d.ausgaben.push({ betrag: betrag, kategorie: kategorie, datum: mittag.toISOString() });
+    d.ausgaben.push({ betrag: betrag, kategorie: kategorie, notiz: String(zeile[4] || "").trim(), datum: mittag.toISOString() });
   }
 
   const periodenBlatt = mappe.Sheets["Perioden"];
@@ -1366,12 +1390,14 @@ function oeffneAusgabe(index) {
     const ausgabe = daten.ausgaben[index];
     betragInput.value = ausgabe.betrag;
     kategorieInput.value = ausgabe.kategorie;
+    notizInput.value = ausgabe.notiz || "";
     ausgabeTitel.textContent = "Ausgabe bearbeiten";
     ausgabeLoeschen.hidden = false;
   } else {
     bearbeitenIndex = null;
     betragInput.value = "";
     kategorieInput.value = "";
+    notizInput.value = "";
     ausgabeTitel.textContent = "Neue Ausgabe";
     ausgabeLoeschen.hidden = true;
   }
@@ -1413,6 +1439,7 @@ ausgabeForm.addEventListener("submit", function (event) {
     daten.ausgaben.push({
       betrag: betrag,
       kategorie: kategorieInput.value,
+      notiz: notizInput.value.trim(),
       datum: new Date().toISOString()
     });
     daten.eintraegeGesamt = daten.eintraegeGesamt + 1;
@@ -1444,6 +1471,7 @@ ausgabeForm.addEventListener("submit", function (event) {
     // Bestehende Ausgabe ändern
     daten.ausgaben[bearbeitenIndex].betrag = betrag;
     daten.ausgaben[bearbeitenIndex].kategorie = kategorieInput.value;
+    daten.ausgaben[bearbeitenIndex].notiz = notizInput.value.trim();
     nachAenderung();
     zeigeToast("Gespeichert ✓");
   }
@@ -1467,8 +1495,11 @@ function eintragHTML(ausgabe) {
     month: "short"
   });
   const kategorie = ausgabe.kategorie || OHNE_KATEGORIE;
-  return "<span>" + datum + " · " + kategorie + "</span>" +
-         "<strong>" + chf(ausgabe.betrag) + "</strong>";
+  let text = "<span class='eintrag-text'><span>" + datum + " · " + kategorie + "</span>";
+  if (ausgabe.notiz) {
+    text = text + "<span class='notiz'>📝 " + sicher(ausgabe.notiz) + "</span>";
+  }
+  return text + "</span><strong>" + chf(ausgabe.betrag) + "</strong>";
 }
 
 function aktualisiereListe() {
